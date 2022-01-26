@@ -1,0 +1,6 @@
+All tests cann be run from the root folder with the following command...
+
+python -m unittest discover -s tests -p "*_UnitTests.py"
+
+The test naming convension is file_function_unitests.py so that it is clear what function is explicitly being tested
+
