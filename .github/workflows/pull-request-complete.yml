@@ -1,0 +1,95 @@
+env:
+  "IMAGE_TAG": "1.0"
+  "IMAGE_REPOSITORY_OWNER" : "PyAPI"
+  "IMAGE_NAME_FULL" : "pyapi_demo_img"
+  "ENV" : "dev"
+  "REGISTRY_LOGIN_SERVER_TEST": "test_registry"
+
+name: Auto - Development build on pull request complete
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  #################################################
+  # PYAPI
+  #################################################
+
+  pyapi-service-run-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+        # Checkout the latest code from the repo
+      - name: Checkout repo
+        uses: actions/checkout@v2
+        # Setup which version of Python to use
+      - name: Set Up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.7.5
+        # Display the Python version being used
+      - name: Display Python version
+        working-directory: app
+        run: python -c "import sys; print(sys.version)"
+      - name: Install pytest
+        working-directory: ./app/service/
+        run: |
+          pip install --upgrade pip
+          pip install Cython numpy
+          ls
+          pip install -r requirements.txt
+        # Run the tests. I'm using pytest and the file is in the tests directory.
+      - name: Run tests
+        working-directory: ./app/service/
+        run: python -m unittest discover -s tests -p "*_unitTests.py" -v
+
+  pyapi-service-test-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        
+      - name: Build Docker Image
+        working-directory: ./app
+        run: docker build -t ${{ env.REGISTRY_LOGIN_SERVER_TEST }}/${{ env.IMAGE_NAME_FULL }}:${{ env.IMAGE_TAG }} --build-arg BUILDENV=${{ env.ENV}} .     
+
+  pyapi-service-deploy-to-azure-dev:
+    needs: [pyapi-service-run-unit-tests, pyapi-service-test-build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Login to Azure
+        uses: Azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get Key Vault Data
+        uses: Azure/get-keyvault-secrets@v1
+        with:
+          keyvault: "kv-identity-dpan-sandpit"
+          secrets: 'pyapi-client-id, pyapi-client-secret'
+        id: keyvault_items
+
+      - name: Login to ACR
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.REGISTRY_LOGIN_SERVER }}
+          username: ${{ steps.keyvault_items.outputs.pyapi-client-id }}
+          password: ${{ steps.keyvault_items.outputs.pyapi-client-secret }}
+          
+      - name: Build Docker Image
+        working-directory: ./app
+        run: docker build -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME_FULL }}:${{ env.IMAGE_TAG }} --build-arg BUILDENV=${{env.ENV}} .   
+
+      - name: Push the image to ACR
+        run: docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME_FULL }}:${{ env.IMAGE_TAG }}
+      
+      - name: Invoke deployment hook
+        uses: distributhor/workflow-webhook@v1
+        env:
+          webhook_type: 'json-extended'
+          webhook_url: ${{ secrets.PYAPI_WEBHOOK_URL_DEV }}
+          webhook_secret: ${{ secrets.WEBHOOK_SECRET_ALL }} 

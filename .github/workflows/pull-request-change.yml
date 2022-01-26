@@ -1,0 +1,55 @@
+env:
+  "IMAGE_TAG": "1.0"
+  "IMAGE_REPOSITORY_OWNER" : "PyAPI"
+  "IMAGE_NAME_FULL" : "pyapi_demo_img"
+  "ENV" : "dev"
+  "REGISTRY_LOGIN_SERVER_TEST": "test_registry"
+
+name: Auto - Development build on pull request change
+on:
+  push:
+    branches: [ development ]
+
+jobs:
+
+  #################################################
+  # PYAPI
+  #################################################
+
+  pyapi-service-run-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+        # Checkout the latest code from the repo
+      - name: Checkout repo
+        uses: actions/checkout@v2
+        # Setup which version of Python to use
+      - name: Set Up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.7.5
+        # Display the Python version being used
+      - name: Display Python version
+        working-directory: app
+        run: python -c "import sys; print(sys.version)"
+      - name: Install pytest
+        working-directory: ./data-service/service/
+        run: |
+          pip install --upgrade pip
+          pip install Cython numpy
+          ls
+          pip install -r requirements.txt
+        # Run the tests. I'm using pytest and the file is in the tests directory.
+      - name: Run tests
+        working-directory: ./app/service/
+        run: python -m unittest discover -s tests -p "*_unitTests.py" -v
+
+  pyapi-service-test-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        
+      - name: Build Docker Image
+        working-directory: ./app
+        run: docker build -t ${{ env.REGISTRY_LOGIN_SERVER_TEST }}/${{ env.IMAGE_NAME_FULL }}:${{ env.IMAGE_TAG }} --build-arg BUILDENV=${{ env.ENV}} .     

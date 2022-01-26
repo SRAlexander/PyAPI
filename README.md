@@ -59,6 +59,17 @@ So to work inline with standard Dependency injection libaries, controls need to 
 DB access is managed by AlchemySession class (alchemy.common.session) which can be injected into any repository. The connection string is managed in the instance >  config_env.py files pending on the environment set with the FLASK_APP environment variable. There is no reason why a second AlchemySession type class can be added to introduce another DB soruce. The query syntax can be explored through the SQL Alchemy docuementation. 
 
 
-##### Dockerfile
+###### Dockerfile
 
 The project can be built into a docker image by default. It is also environment configured through a BUILDENV variable. 
+
+###### GitHub Actions
+
+Two github actions have been provided, one for pull-requests-change which will test the image build and run all unit tests and pull-request-complete which will deploy to an Azure Web App if configured. You will however need to configure the following secrets...
+
+AZURE_CREDENTIALS = { subscriptionId : "", tenantId: "", clientId: "", clientSecret: ""}
+REGISTRY_LOGIN_SERVER = Azure ACR login server name, can be found on the ACR main overview page.
+PYAPI_WEBHOOK_URL_DEV = Full webhook url found in an AppService
+WEBHOOK_SECRET_ALL = just set to a " ", the secret is included in the WEBHOOK URL but the action requires two seperate fields
+
+There are also two secret pulled through from a keyvault, if you don't want to use a keyvault, configure them to a Github secret but the example includes the KeyVault option to demonstrate how they are used. 
